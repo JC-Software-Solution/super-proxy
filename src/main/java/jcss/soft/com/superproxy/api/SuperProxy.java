@@ -26,9 +26,9 @@ import jcss.soft.com.superproxy.status.SuperProxyStatus;
  *   <li>Kong plugin bindings (e.g. IP-allowlist, rate-limiting)</li>
  * </ul>
  *
- * <p>API group: {@code proxy.mynt.xyz / v1}
+ * <p>API group: {@code jcss.soft.com / v1}
  */
-@Group("proxy.mynt.xyz")
+@Group("jcss.soft.com")
 @Version("v1")
 @Kind("SuperProxy")
 @Plural("superproxies")

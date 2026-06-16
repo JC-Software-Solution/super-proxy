@@ -9,13 +9,13 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.*;
 
 import jcss.soft.com.superproxy.spec.SuperProxySpec;
 import jcss.soft.com.superproxy.status.SuperProxyStatus;
 import jcss.soft.com.superproxy.api.SuperProxy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -37,9 +37,9 @@ import org.springframework.beans.factory.annotation.Value;
 @Slf4j
 @ControllerConfiguration(
         name = "superproxy-controller",
-        finalizerName = "proxy.mynt.xyz/finalizer"
+        finalizerName = "jcss.soft.com/finalizer"
 )
-@RequiredArgsConstructor(onConstructor_ = @Inject)
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<SuperProxy> {
 
     // ── Port constants ──────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
         m.put("app",              name);
         m.put("env",              spec.getEnv());
         m.put(APP_LABEL,          MANAGED_BY_VALUE);
-        m.put("proxy.mynt.xyz/name", spec.getName());
+        m.put("jcss.soft.com/name", spec.getName());
         return m;
     }
 

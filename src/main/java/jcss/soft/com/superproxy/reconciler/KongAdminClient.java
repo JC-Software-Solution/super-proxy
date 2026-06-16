@@ -1,23 +1,14 @@
 package jcss.soft.com.superproxy.reconciler;
 
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.ws.rs.client.ClientBuilder;
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-
-import jakarta.ws.rs.client.Client;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Thin façade over the Kong Admin API used by {@link SuperProxyReconciler}.
@@ -29,9 +20,7 @@ import java.util.List;
  *   <li>{@link #deleteRoute} – remove a route by name (called during finalizer cleanup).</li>
  * </ul>
  *
- * <p>In a real implementation you would use the Quarkus REST client with a typed
- * interface; a plain JAX-RS {@link Client} is used here to keep the example
- * self-contained and dependency-free.
+ * <p>Uses Spring's RestClient for HTTP communication with automatic JSON serialization.
  */
 @Slf4j
 @Service
@@ -40,8 +29,11 @@ public class KongAdminClient {
     @Value("${operator.kong.admin-url:http://kong-admin.kong:8001}")
     String kongAdminUrl;
 
-    @Autowired
-    ObjectMapper mapper;
+    private final RestClient restClient;
+
+    public KongAdminClient(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder.build();
+    }
 
     // ── Route ──────────────────────────────────────────────────────────────────
 
@@ -60,62 +52,54 @@ public class KongAdminClient {
                               boolean preserveHost,
                               List<String> tags) {
 
-        Client client = ClientBuilder.newClient();
         try {
             // Build route payload
-            ObjectNode payload = mapper.createObjectNode();
+            Map<String, Object> payload = new HashMap<>();
             payload.put("name", routeName);
-
-            ArrayNode pathsNode = mapper.createArrayNode();
-            pathsNode.add(endpoint);
-            payload.set("paths", pathsNode);
-
-            ArrayNode methodsNode = mapper.createArrayNode();
-            if (methods != null) methods.forEach(methodsNode::add);
-            payload.set("methods", methodsNode);
-
-            payload.put("strip_path",    stripPath);
+            payload.put("paths", List.of(endpoint));
+            payload.put("methods", methods != null ? methods : List.of());
+            payload.put("strip_path", stripPath);
             payload.put("preserve_host", preserveHost);
-
+            
             if (tags != null && !tags.isEmpty()) {
-                ArrayNode tagsNode = mapper.createArrayNode();
-                tags.forEach(tagsNode::add);
-                payload.set("tags", tagsNode);
+                payload.put("tags", tags);
             }
 
             // Attach to Kong service
-            ObjectNode serviceNode = mapper.createObjectNode();
-            serviceNode.put("name", kongServiceName);
-            payload.set("service", serviceNode);
+            payload.put("service", Map.of("name", kongServiceName));
 
-            String url = kongAdminUrl + "/routes/" + routeName;
-            log.debug("PUT {} → {}", url, payload);
+            String putUrl = kongAdminUrl + "/routes/" + routeName;
+            log.debug("PUT {} → {}", putUrl, payload);
 
-            Response response = client.target(url)
-                    .request(MediaType.APPLICATION_JSON)
-                    .put(Entity.json(payload.toString()));
-
-            if (response.getStatus() == 404) {
+            Map<String, Object> result;
+            try {
+                result = restClient.put()
+                        .uri(putUrl)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(payload)
+                        .retrieve()
+                        .body(Map.class);
+            } catch (Exception e) {
                 // Route does not exist – create via POST
-                response = client.target(kongAdminUrl + "/routes")
-                        .request(MediaType.APPLICATION_JSON)
-                        .post(Entity.json(payload.toString()));
+                log.debug("Route {} not found, creating via POST", routeName);
+                result = restClient.post()
+                        .uri(kongAdminUrl + "/routes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(payload)
+                        .retrieve()
+                        .body(Map.class);
             }
 
-            if (response.getStatus() < 200 || response.getStatus() >= 300) {
-                throw new RuntimeException("Kong route upsert failed: HTTP " + response.getStatus()
-                        + " – " + response.readEntity(String.class));
+            if (result == null || !result.containsKey("id")) {
+                throw new RuntimeException("Kong route upsert failed: invalid response");
             }
 
-            JsonNode result = mapper.readTree(response.readEntity(String.class));
-            String routeId = result.get("id").asText();
+            String routeId = result.get("id").toString();
             log.info("Kong route {} (id={}) upserted successfully", routeName, routeId);
             return routeId;
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to upsert Kong route: " + e.getMessage(), e);
-        } finally {
-            client.close();
         }
     }
 
@@ -126,30 +110,27 @@ public class KongAdminClient {
      * Idempotent: if the plugin is already attached the call is a no-op.
      */
     public void enablePluginOnRoute(String routeId, String pluginName) {
-        Client client = ClientBuilder.newClient();
         try {
-            ObjectNode payload = mapper.createObjectNode();
-            payload.put("name", pluginName);
+            Map<String, Object> payload = Map.of("name", pluginName);
 
             String url = kongAdminUrl + "/routes/" + routeId + "/plugins";
             log.debug("POST {} → {}", url, payload);
 
-            Response response = client.target(url)
-                    .request(MediaType.APPLICATION_JSON)
-                    .post(Entity.json(payload.toString()));
-
-            // 409 means already enabled – that is fine
-            if (response.getStatus() != 409
-                    && (response.getStatus() < 200 || response.getStatus() >= 300)) {
-                throw new RuntimeException("Failed to enable plugin " + pluginName
-                        + " on route " + routeId + ": HTTP " + response.getStatus());
-            }
+            restClient.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
 
             log.info("Plugin {} enabled on route {}", pluginName, routeId);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to enable Kong plugin: " + e.getMessage(), e);
-        } finally {
-            client.close();
+            // 409 means already enabled – that is fine
+            if (e.getMessage() != null && e.getMessage().contains("409")) {
+                log.info("Plugin {} already enabled on route {}", pluginName, routeId);
+            } else {
+                throw new RuntimeException("Failed to enable Kong plugin: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -160,22 +141,23 @@ public class KongAdminClient {
      * A 404 is treated as success (already gone).
      */
     public void deleteRoute(String routeName) {
-        Client client = ClientBuilder.newClient();
         try {
             String url = kongAdminUrl + "/routes/" + routeName;
             log.debug("DELETE {}", url);
 
-            Response response = client.target(url)
-                    .request()
-                    .delete();
-
-            if (response.getStatus() != 204 && response.getStatus() != 404) {
-                throw new RuntimeException("Kong route deletion failed: HTTP " + response.getStatus());
-            }
+            restClient.delete()
+                    .uri(url)
+                    .retrieve()
+                    .body(Void.class);
 
             log.info("Kong route {} deleted", routeName);
-        } finally {
-            client.close();
+        } catch (Exception e) {
+            // 404 is acceptable (already gone)
+            if (e.getMessage() != null && e.getMessage().contains("404")) {
+                log.info("Kong route {} already deleted", routeName);
+            } else {
+                throw new RuntimeException("Kong route deletion failed: " + e.getMessage(), e);
+            }
         }
     }
 }
