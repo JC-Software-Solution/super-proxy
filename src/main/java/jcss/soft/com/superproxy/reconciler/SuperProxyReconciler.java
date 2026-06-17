@@ -18,6 +18,7 @@ import jcss.soft.com.superproxy.api.SuperProxy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 
 /**
  * Core reconciliation loop for {@link SuperProxy} resources.
@@ -55,7 +56,7 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
     private final KongAdminClient  kongAdmin;
 
     // ── Config ──────────────────────────────────────────────────────────────────
-    @Value("${operator.kong.admin-url:http://kong-admin.kong:8001}")
+    @Value("${operator.kong.admin-url:http://kong-admin.kong:8002}")
     String kongServiceName;
 
     // ═══════════════════════════════════════════════════════════════════════════
