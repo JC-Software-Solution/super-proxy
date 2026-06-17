@@ -17,6 +17,7 @@ import jcss.soft.com.superproxy.status.SuperProxyStatus;
 import jcss.soft.com.superproxy.api.SuperProxy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * Core reconciliation loop for {@link SuperProxy} resources.
@@ -35,6 +36,7 @@ import org.springframework.beans.factory.annotation.Value;
  * when the {@code SuperProxy} is deleted.
  */
 @Slf4j
+@Component
 @ControllerConfiguration(
         name = "superproxy-controller",
         finalizerName = "jcss.soft.com/finalizer"
