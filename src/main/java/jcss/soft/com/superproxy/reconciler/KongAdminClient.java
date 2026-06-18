@@ -26,7 +26,7 @@ import java.util.Map;
 @Service
 public class KongAdminClient {
 
-    @Value("${operator.kong.admin-url:http://kong-admin.kong:8001}")
+    @Value("${operator.kong.admin-url}")
     String kongAdminUrl;
 
     private final RestClient restClient;
