@@ -39,7 +39,8 @@ public class KongAdminClient {
 
     /**
      * Creates a Kong route if one with {@code routeName} does not exist yet,
-     * or patches it in place if it does.
+     * or patches it in place if it does. Ensures the backing Kong Service
+     * exists first, since routes reference services by name as a foreign key.
      *
      * @return the Kong route ID (UUID string)
      */
@@ -53,6 +54,9 @@ public class KongAdminClient {
                               List<String> tags) {
 
         try {
+            // 0. Ensure the Kong Service exists and points at the right upstream
+            upsertService(kongServiceName, upstreamHost);
+
             // Build route payload
             Map<String, Object> payload = new HashMap<>();
             payload.put("name", routeName);
@@ -60,12 +64,12 @@ public class KongAdminClient {
             payload.put("methods", methods != null ? methods : List.of());
             payload.put("strip_path", stripPath);
             payload.put("preserve_host", preserveHost);
-            
+
             if (tags != null && !tags.isEmpty()) {
                 payload.put("tags", tags);
             }
 
-            // Attach to Kong service
+            // Attach to Kong service (now guaranteed to exist)
             payload.put("service", Map.of("name", kongServiceName));
 
             String putUrl = kongAdminUrl + "/routes/" + routeName;
@@ -100,6 +104,34 @@ public class KongAdminClient {
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to upsert Kong route: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Creates or updates the Kong Service object that the route will attach to.
+     * {@code upstreamHost} is the in-cluster FQDN of the Kubernetes Service
+     * fronting the proxy pods (e.g. "name.namespace.svc.cluster.local").
+     */
+    private void upsertService(String kongServiceName, String upstreamHost) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("name", kongServiceName);
+        payload.put("host", upstreamHost);
+        payload.put("port", 80); // matches SERVICE_PORT in SuperProxyReconciler
+        payload.put("protocol", "http");
+
+        String putUrl = kongAdminUrl + "/services/" + kongServiceName;
+        log.debug("PUT {} → {}", putUrl, payload);
+
+        try {
+            restClient.put()
+                    .uri(putUrl)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            log.info("Kong service {} upserted (host={}, port=80)", kongServiceName, upstreamHost);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upsert Kong service: " + e.getMessage(), e);
         }
     }
 
