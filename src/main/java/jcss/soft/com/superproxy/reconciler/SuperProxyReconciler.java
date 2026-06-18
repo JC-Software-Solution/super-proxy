@@ -55,9 +55,6 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
     private final KubernetesClient k8s;
     private final KongAdminClient  kongAdmin;
 
-    // ── Config ──────────────────────────────────────────────────────────────────
-    @Value("${operator.kong.admin-url:http://kong-admin.kong:8002}")
-    String kongServiceName;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // reconcile
@@ -68,6 +65,7 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
         SuperProxySpec spec = resource.getSpec();
         String         ns   = resource.getMetadata().getNamespace();
         String         name = proxyName(spec);
+        String         kongServiceName = name + "-kong-svc";
 
         log.info("Reconciling SuperProxy {}/{}", ns, resource.getMetadata().getName());
 
