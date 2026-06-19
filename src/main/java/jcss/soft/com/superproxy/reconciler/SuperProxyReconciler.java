@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.apps.*;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.*;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
+import jcss.soft.com.superproxy.spec.SuperProxyPlugin;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -100,8 +101,8 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
 
             // 4. Kong plugins ────────────────────────────────────────────────────
             if (spec.getPlugins() != null) {
-                for (String plugin : spec.getPlugins()) {
-                    kongAdmin.enablePluginOnRoute(kongRouteId, plugin);
+                for (SuperProxyPlugin plugin : spec.getPlugins()) {
+                    kongAdmin.enablePluginOnRoute(kongRouteId, plugin.getName(), plugin.getConfig());
                 }
             }
             conditions.add(condition("PluginsReady", "True", "PluginsAttached",

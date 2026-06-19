@@ -55,7 +55,7 @@ public class SuperProxySpec {
      * Each entry must correspond to an existing Kong plugin object.
      * Example: {@code ["ipAddress", "rate-limiting"]}
      */
-    private List<String> plugins;
+    private List<SuperProxyPlugin> plugins;
 
     /**
      * Kong route configuration for the external endpoint.

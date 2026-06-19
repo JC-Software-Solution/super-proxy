@@ -141,9 +141,13 @@ public class KongAdminClient {
      * Attaches a named plugin to an existing Kong route.
      * Idempotent: if the plugin is already attached the call is a no-op.
      */
-    public void enablePluginOnRoute(String routeId, String pluginName) {
+    public void enablePluginOnRoute(String routeId, String pluginName, Map<String, Object> config) {
         try {
-            Map<String, Object> payload = Map.of("name", pluginName);
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("name", pluginName);
+            if (config != null && !config.isEmpty()) {
+                payload.put("config", config);
+            }
 
             String url = kongAdminUrl + "/routes/" + routeId + "/plugins";
             log.debug("POST {} → {}", url, payload);
@@ -155,9 +159,8 @@ public class KongAdminClient {
                     .retrieve()
                     .body(Map.class);
 
-            log.info("Plugin {} enabled on route {}", pluginName, routeId);
+            log.info("Plugin {} enabled on route {} (config={})", pluginName, routeId, config);
         } catch (Exception e) {
-            // 409 means already enabled – that is fine
             if (e.getMessage() != null && e.getMessage().contains("409")) {
                 log.info("Plugin {} already enabled on route {}", pluginName, routeId);
             } else {
