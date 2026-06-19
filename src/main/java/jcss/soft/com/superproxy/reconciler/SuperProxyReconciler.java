@@ -108,6 +108,22 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
             conditions.add(condition("PluginsReady", "True", "PluginsAttached",
                     "All plugins attached to route " + kongRouteId));
 
+            log.info(
+                    "Updating status for {} rv={}",
+                    resource.getMetadata().getName(),
+                    resource.getMetadata().getResourceVersion()
+            );
+
+            SuperProxy latest = k8s.resources(SuperProxy.class)
+                    .inNamespace(ns)
+                    .withName(resource.getMetadata().getName())
+                    .get();
+
+            log.info(
+                    "Latest rv={}",
+                    latest.getMetadata().getResourceVersion()
+            );
+
             // 5. Status ──────────────────────────────────────────────────────────
             SuperProxyStatus status = SuperProxyStatus.builder()
                     .phase(SuperProxyStatus.Phase.Ready)
@@ -194,7 +210,7 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
                 .withResources(spec.getResources())
                 .withReadinessProbe(new ProbeBuilder()
                         .withHttpGet(new HTTPGetActionBuilder()
-                                .withPath("/health/ready")
+                                .withPath("/actuator/health/readiness")
                                 .withPort(new IntOrString(PROXY_CONTAINER_PORT))
                                 .build())
                         .withInitialDelaySeconds(5)
@@ -202,7 +218,7 @@ public class SuperProxyReconciler implements Reconciler<SuperProxy>, Cleaner<Sup
                         .build())
                 .withLivenessProbe(new ProbeBuilder()
                         .withHttpGet(new HTTPGetActionBuilder()
-                                .withPath("/health/live")
+                                .withPath("/actuator/health/liveness")
                                 .withPort(new IntOrString(PROXY_CONTAINER_PORT))
                                 .build())
                         .withInitialDelaySeconds(15)
